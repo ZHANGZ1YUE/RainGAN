@@ -5,7 +5,7 @@ import time
 import random
 from collections import defaultdict
 from pathlib import Path
-from Model import Generator
+from Model import Generator, Discriminator
 
 import torchvision.transforms as transforms
 from torchvision.utils import save_image
@@ -17,8 +17,13 @@ import torch.nn.functional as F
 import torch
 
 import matplotlib.pyplot as plt
+from tqdm import tqdm
 
 
+
+
+
+##########################   Training Setting   ##############################
 def seed_everything(seed):
     torch.manual_seed(seed)       # Current CPU
     torch.cuda.manual_seed(seed)  # Current GPU
@@ -28,13 +33,24 @@ def seed_everything(seed):
     torch.backends.cudnn.deterministic = True # Close optimization
     torch.cuda.manual_seed_all(seed) # All GPU (Optional)
 
-
-##########################   Training Setting   ##############################
 seed_everything(20220901)
-save_path = "generator.pth"
 cuda_device = 7
-epoch = 50
-learning_rate = 0.001
+torch.cuda.set_device(cuda_device)
+device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+
+epochs = 500
+lr_G = 0.0002
+lr_D = 0.001
+batchsize = 8
+g_path = "generator.pth"
+d_path = "discriminator.pth"
+
+input_channel = 4
+output_channel = 1
+_lambda = 20
+
+
+
 
 
 #################################   Dataset Preparation & Preprocessing   ###################################
@@ -63,8 +79,6 @@ class rain(Dataset):
             output = self.transform(output)
 
         return input, output
-
-
 
 #####################################   Dataset Loading   ###########################################
 
@@ -99,98 +113,103 @@ onebatch = next(dataloader_iter)
 print(onebatch[0].size())
 '''
 
-dataloaders = {                   ########################删除
-  'train': train_loader,
-  'val': val_loader
-}
+
+
+
 
 
 
 
 
 #######################################   Start Training   #################################################
+def weights_init(m):
+    classname = m.__class__.__name__
+    if classname.find('Conv') != -1:
+        m.weight.data.normal_(0.0, 0.02)
+    elif classname.find('BatchNorm2d') != -1:
+        m.weight.data.normal_(1.0, 0.02)
+        m.bias.data.fill_(0)
 
-#Training function
-criterion = nn.MSELoss()
-torch.cuda.set_device(cuda_device)
-device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
-model = Generator().to(device)
+generator = Generator()
+discriminator = Discriminator(input_channel, output_channel)
+#weights_init(generator)
+#weights_init(discriminator)
 
-def calc_loss(pred, target, metrics):
-    loss = criterion(pred, target)
-    metrics['loss'] += loss.data.cpu().numpy() * target.size(0)
-    return loss
+generator.to(device)
+discriminator.to(device)
 
-def print_metrics(metrics, epoch_samples, phase):
-    outputs = []
-    for k in metrics.keys():
-        outputs.append("{}: {:4f}".format(k, metrics[k] / epoch_samples))
+loss_L1 = nn.L1Loss().cuda()
+loss_binaryCrossEntropy = nn.BCELoss().cuda()
 
-    print("{}: {}".format(phase, ", ".join(outputs)))
+optimizer_G= torch.optim.Adam(generator.parameters(), lr= lr_G, betas=(0.5, 0.999), weight_decay = 0.00001)
+optimizer_D= torch.optim.Adam(discriminator.parameters(), lr= lr_D, betas=(0.5, 0.999), weight_decay = 0.00001)
 
-def train_model(model, optimizer, num_epochs):
-    best_loss = 1e10
+def GAN_Loss(input, target, criterion):
+    if target == True:
+        tmp_tensor = torch.FloatTensor(input.size()).fill_(1.0)
+        labels = Variable(tmp_tensor, requires_grad=False)
+    else:
+        tmp_tensor = torch.FloatTensor(input.size()).fill_(0.0)
+        labels = Variable(tmp_tensor, requires_grad=False)
 
-    for epoch in range(num_epochs):
-        print('Epoch {}/{}'.format(epoch + 1, num_epochs))
-        print('-' * 10)
+    if torch.cuda.is_available():
+        labels = labels.cuda()
 
-        since = time.time()
+    return criterion(input, labels)
 
-        # Each epoch has a training and validation phase
-        for phase in ['train', 'val']: 
-            if phase == 'train':
-                model.train()  # Set model to training mode
-            else:
-                model.eval()   # Set model to evaluate mode
+def to_variable(x):
+    if torch.cuda.is_available():
+        x = x.to(device, dtype=torch.float32)
+    return Variable(x)
 
-            metrics = defaultdict(float)
-            epoch_samples = 0
 
-            for input, output in dataloaders[phase]:
-                input = input.to(device, dtype=torch.float32)  
-                output = output.to(device, dtype=torch.float32)
 
-                # zero the parameter gradients
-                optimizer.zero_grad()
+total_step = len(train_loader) # For Print Log
+for epoch in range(epochs):
+    for i, batch in enumerate(train_loader):
 
-                # forward
-                # track history if only in train
-                with torch.set_grad_enabled(phase == 'train'):
-                    prediction = model(input)
-                    loss = calc_loss(prediction, output, metrics)
+        input_A = batch[0]
+        input_B = batch[1]
 
-                    # backward + optimize only if in training phase
-                    if phase == 'train':
-                        loss.backward()
-                        optimizer.step()
+        # ===================== Train D =====================#
+        discriminator.zero_grad()
 
-                # statistics
-                epoch_samples += input.size(0)
+        real_A = to_variable(input_A)
+        fake_B = generator(real_A)
+        real_B = to_variable(input_B)
 
-            print_metrics(metrics, epoch_samples, phase)
-            epoch_loss = metrics['loss'] / epoch_samples
+        # d_optimizer.zero_grad()
 
-            #if phase == 'train':
-            #  scheduler.step()
-            #  for param_group in optimizer.param_groups:
-            #      print("LR", param_group['lr'])
+        pred_fake = discriminator(real_A, fake_B)
+        loss_D_fake = GAN_Loss(pred_fake, False, loss_binaryCrossEntropy)
 
-            # save the model weights
-            if phase == 'val' and epoch_loss < best_loss:
-                print(f"saving best model to {save_path}")
-                best_loss = epoch_loss
-                torch.save(model.state_dict(), save_path)
+        pred_real = discriminator(real_A, real_B)
+        loss_D_real = GAN_Loss(pred_real, True, loss_binaryCrossEntropy)
 
-        time_elapsed = time.time() - since
-        print('{:.0f}m {:.0f}s'.format(time_elapsed // 60, time_elapsed % 60))
+        # Combined loss
+        loss_D = (loss_D_fake + loss_D_real) * 0.5
+        loss_D.backward(retain_graph=True)
+        optimizer_D.step()
 
-    print('Best val loss: {:4f}'.format(best_loss))
+        # ===================== Train G =====================#
+        generator.zero_grad()
 
-    # load best model weights
-    #model.load_state_dict(torch.load(save_path))
-    #return model
+        pred_fake = discriminator(real_A, fake_B)
+        loss_G_GAN = GAN_Loss(pred_fake, True, loss_binaryCrossEntropy)
 
-optimizer = torch.optim.Adam(model.parameters(), lr= learning_rate)
-#scheduler = lr_scheduler.StepLR(optimizer, step_size=8, gamma=0.1)
-train_model(model, optimizer, epoch)
+        loss_G_L1 = loss_L1(fake_B, real_B)
+
+        loss_G = loss_G_GAN + loss_G_L1 * _lambda
+        loss_G.backward()
+        optimizer_G.step()
+
+        # print the log info
+        if (i + 1) % 10 == 0:
+            print('Epoch [%d/%d], BatchStep[%d/%d], D_Real_loss: %.4f, D_Fake_loss: %.4f, G_loss: %.4f, G_L1_loss: %.4f'
+                    % (epoch + 1, epochs, i + 1, total_step, loss_D_real.item(), loss_D_fake.data.item(), loss_G_GAN.data.item(), loss_G_L1.data.item()))
+
+    # save the model parameters for each epoch
+  
+torch.save(generator.state_dict(), g_path)
+torch.save(discriminator.state_dict(), d_path)
+

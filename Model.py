@@ -100,3 +100,28 @@ class Generator(nn.Module):
         output_layer = self.outconv(x)
         return output_layer
 
+
+
+class Discriminator(nn.Module):
+    def __init__(self, in_channels1, in_channels2):
+        super(Discriminator, self).__init__()
+
+        self.c0 = nn.Conv2d(in_channels1 + in_channels2, 64, 4, stride=2, padding=2)
+        self.c1 = nn.Conv2d(64, 128, 4, stride=2, padding=2)
+        self.c2 = nn.Conv2d(128, 256, 4, stride=2, padding=2)
+        self.c3 = nn.Conv2d(256, 512, 4, stride=1, padding=2)
+        self.c4 = nn.Conv2d(512, 1, 4, stride=1, padding=2)
+
+        self.bnc1 = nn.BatchNorm2d(128)
+        self.bnc2 = nn.BatchNorm2d(256)
+        self.bnc3 = nn.BatchNorm2d(512)        
+
+    def forward(self, x1, x2):
+        h = self.c0(torch.cat((x1, x2),1))
+        h = self.bnc1(self.c1(F.leaky_relu(h, negative_slope=0.2)))
+        h = self.bnc2(self.c2(F.leaky_relu(h, negative_slope=0.2)))
+        h = self.bnc3(self.c3(F.leaky_relu(h, negative_slope=0.2)))
+        h = self.c4(F.leaky_relu(h, negative_slope=0.2))
+        h = F.sigmoid(h)
+
+        return h

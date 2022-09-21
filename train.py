@@ -3,12 +3,10 @@ import numpy as np
 import math
 import time
 import random
-from collections import defaultdict
 from pathlib import Path
 from Model import Generator, Discriminator
 
 import torchvision.transforms as transforms
-from torchvision.utils import save_image
 from torch.utils.data import DataLoader, random_split, Dataset
 from torchvision import datasets
 from torch.autograd import Variable
@@ -17,7 +15,6 @@ import torch.nn.functional as F
 import torch
 
 import matplotlib.pyplot as plt
-from tqdm import tqdm
 
 
 
@@ -34,7 +31,7 @@ def seed_everything(seed):
     torch.cuda.manual_seed_all(seed) # All GPU (Optional)
 
 seed_everything(20220901)
-cuda_device = 7
+cuda_device = 4
 torch.cuda.set_device(cuda_device)
 device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
@@ -64,7 +61,7 @@ class rain(Dataset):
         self.input_dir = Path(input_dir)
         self.output_dir = Path(output_dir)
         self.input = np.load(self.input_dir)
-        self.output = output = np.load(self.output_dir)
+        self.output  = np.load(self.output_dir)
         self.transform = transform
 
     def __len__(self):
@@ -122,18 +119,10 @@ print(onebatch[0].size())
 
 
 #######################################   Start Training   #################################################
-def weights_init(m):
-    classname = m.__class__.__name__
-    if classname.find('Conv') != -1:
-        m.weight.data.normal_(0.0, 0.02)
-    elif classname.find('BatchNorm2d') != -1:
-        m.weight.data.normal_(1.0, 0.02)
-        m.bias.data.fill_(0)
+
 
 generator = Generator()
 discriminator = Discriminator(input_channel, output_channel)
-#weights_init(generator)
-#weights_init(discriminator)
 
 generator.to(device)
 discriminator.to(device)
@@ -163,7 +152,6 @@ def to_variable(x):
     return Variable(x)
 
 
-
 total_step = len(train_loader) # For Print Log
 for epoch in range(epochs):
     for i, batch in enumerate(train_loader):
@@ -178,7 +166,6 @@ for epoch in range(epochs):
         fake_B = generator(real_A)
         real_B = to_variable(input_B)
 
-        # d_optimizer.zero_grad()
 
         pred_fake = discriminator(real_A, fake_B)
         loss_D_fake = GAN_Loss(pred_fake, False, loss_binaryCrossEntropy)

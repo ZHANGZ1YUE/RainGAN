@@ -117,11 +117,11 @@ class Discriminator(nn.Module):
         self.bnc3 = nn.BatchNorm2d(512)        
 
     def forward(self, x1, x2):
-        h = self.c0(torch.cat((x1, x2),1))
-        h = self.bnc1(self.c1(F.leaky_relu(h, negative_slope=0.2)))
-        h = self.bnc2(self.c2(F.leaky_relu(h, negative_slope=0.2)))
-        h = self.bnc3(self.c3(F.leaky_relu(h, negative_slope=0.2)))
-        h = self.c4(F.leaky_relu(h, negative_slope=0.2))
-        h = F.sigmoid(h)
+        x = self.c0(torch.cat((x1, x2),1))   #dim = 1 is the channel dim, concatenate along the channel dim (stack more channel)
+        x = self.bnc1(self.c1(F.leaky_relu(x, negative_slope=0.2)))
+        x = self.bnc2(self.c2(F.leaky_relu(x, negative_slope=0.2)))
+        x = self.bnc3(self.c3(F.leaky_relu(x, negative_slope=0.2)))
+        x = self.c4(F.leaky_relu(x, negative_slope=0.2))
+        x = torch.sigmoid(x)
 
-        return h
+        return x

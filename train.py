@@ -1,26 +1,19 @@
-import os
 import numpy as np
-import math
-import time
 import random
-from pathlib import Path
-from Model import Generator, Discriminator
 
-import torchvision.transforms as transforms
-from torch.utils.data import DataLoader, random_split, Dataset
-from torchvision import datasets
+from Model import Generator, Discriminator
+from dataset import raindata
+
+from torch.utils.data import DataLoader, random_split
 from torch.autograd import Variable
 import torch.nn as nn
-import torch.nn.functional as F
 import torch
 
 import matplotlib.pyplot as plt
 
 
 
-
-
-##########################   Training Setting   ##############################
+#######################################   Setting   #######################################
 def seed_everything(seed):
     torch.manual_seed(seed)       # Current CPU
     torch.cuda.manual_seed(seed)  # Current GPU
@@ -31,60 +24,31 @@ def seed_everything(seed):
     torch.cuda.manual_seed_all(seed) # All GPU (Optional)
 
 seed_everything(20220901)
-cuda_device = 4
-torch.cuda.set_device(cuda_device)
-device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
-
+cuda_device = 1
 epochs = 500
 lr_G = 0.0002
 lr_D = 0.001
-batchsize = 8
+batch_size = 16
+input_channel = 4
+output_channel = 1
+_lambda = 20       #scalar for the pixel-wise loss term
 g_path = "generator.pth"
 d_path = "discriminator.pth"
 
-input_channel = 4
-output_channel = 1
-_lambda = 20
+torch.cuda.set_device(cuda_device)
+device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
 
-
-
-
-#################################   Dataset Preparation & Preprocessing   ###################################
-transform = transforms.Compose([
-  transforms.ToTensor()
-])
-
-class rain(Dataset):
-
-    def __init__(self, input_dir, output_dir, transform=transform):
-        self.input_dir = Path(input_dir)
-        self.output_dir = Path(output_dir)
-        self.input = np.load(self.input_dir)
-        self.output  = np.load(self.output_dir)
-        self.transform = transform
-
-    def __len__(self):
-        return len(self.input)
-
-    def __getitem__(self, idx):   #idx就是来选取第几个的那个index
-        input = self.input[idx]
-        output = self.output[idx] 
-
-        if self.transform:
-            input = self.transform(input)  #torch的tensor和np实际上是反过来的，我们需要改动一下
-            output = self.transform(output)
-
-        return input, output
 
 #####################################   Dataset Loading   ###########################################
 
 in_dir = 'paddedinput_30mins_4ch.npy'
 out_dir = 'paddedoutput_30mins_4ch.npy'
 val_percent: float = 0.2 #Use 20% as validation dataset
-batch_size = 16
 
-dataset = rain(in_dir, out_dir, transform)     #创造一个dataset，用我上面自定义的dataset class
+
+
+dataset = raindata(in_dir, out_dir)     #创造一个dataset，用我上面自定义的dataset class
 
 n_val = int(len(dataset) * val_percent)   #这几行就是定义多少个training 多少个validation
 n_train = len(dataset) - n_val
@@ -109,10 +73,6 @@ print(len(train_loader)) # -->29 因为29*16 = 464 大概就是整个training se
 onebatch = next(dataloader_iter)
 print(onebatch[0].size())
 '''
-
-
-
-
 
 
 
@@ -156,21 +116,21 @@ total_step = len(train_loader) # For Print Log
 for epoch in range(epochs):
     for i, batch in enumerate(train_loader):
 
-        input_A = batch[0]
-        input_B = batch[1]
+        # x is the input from the dataset batch, y is the output
+        x, y = batch
 
-        # ===================== Train D =====================#
+        # =================================== Train Discriminator ====================================#
         discriminator.zero_grad()
 
-        real_A = to_variable(input_A)
-        fake_B = generator(real_A)
-        real_B = to_variable(input_B)
+        real_x = to_variable(x)
+        fake_y = generator(real_x)    #Use generator to generate an initial prediction, denote as fake_y
+        real_y = to_variable(y)
 
 
-        pred_fake = discriminator(real_A, fake_B)
+        pred_fake = discriminator(real_x, fake_y)
         loss_D_fake = GAN_Loss(pred_fake, False, loss_binaryCrossEntropy)
 
-        pred_real = discriminator(real_A, real_B)
+        pred_real = discriminator(real_x, real_y)
         loss_D_real = GAN_Loss(pred_real, True, loss_binaryCrossEntropy)
 
         # Combined loss
@@ -178,13 +138,13 @@ for epoch in range(epochs):
         loss_D.backward(retain_graph=True)
         optimizer_D.step()
 
-        # ===================== Train G =====================#
+        # =================================== Train Generator =====================================#
         generator.zero_grad()
 
-        pred_fake = discriminator(real_A, fake_B)
+        pred_fake = discriminator(real_x, fake_y)
         loss_G_GAN = GAN_Loss(pred_fake, True, loss_binaryCrossEntropy)
 
-        loss_G_L1 = loss_L1(fake_B, real_B)
+        loss_G_L1 = loss_L1(fake_y, real_y)
 
         loss_G = loss_G_GAN + loss_G_L1 * _lambda
         loss_G.backward()
@@ -195,7 +155,6 @@ for epoch in range(epochs):
             print('Epoch [%d/%d], BatchStep[%d/%d], D_Real_loss: %.4f, D_Fake_loss: %.4f, G_loss: %.4f, G_L1_loss: %.4f'
                     % (epoch + 1, epochs, i + 1, total_step, loss_D_real.item(), loss_D_fake.data.item(), loss_G_GAN.data.item(), loss_G_L1.data.item()))
 
-    # save the model parameters for each epoch
   
 torch.save(generator.state_dict(), g_path)
 torch.save(discriminator.state_dict(), d_path)

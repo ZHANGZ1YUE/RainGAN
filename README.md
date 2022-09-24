@@ -8,6 +8,6 @@ ZHANG Ziyue (RIKEN Intern, Center of Computational Sciencce)
 2022 Sep. 1st
 
 ## Example case
-The left prediction is original UNet (see my other repositry for detail), the right prediction refers to the GAN architecutrue result.
+The left prediction is original UNet (see my other repositry for detail), the right prediction refers to the GAN architecture result.
 ![Screenshot](example.png)
 

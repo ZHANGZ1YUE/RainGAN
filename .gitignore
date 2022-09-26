@@ -1,4 +1,4 @@
 *.npy
 *.pth
 __pycache__/
-*.ipynb
+#*.ipynb

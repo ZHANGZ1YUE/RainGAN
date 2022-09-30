@@ -1,4 +1,5 @@
 *.npy
 *.pth
 __pycache__/
+load_rawdata.ipynb
 #*.ipynb

@@ -8,6 +8,7 @@ transform = transforms.Compose([
   transforms.ToTensor()
 ])
 
+
 class raindata(Dataset):      #Torch dataset class. __init__, __len__, __getitem__ are necessary
 
     def __init__(self, input_dir, output_dir, transform=transform):

@@ -1,8 +1,9 @@
 import numpy as np
 import random
 
-from Model import Generator, Discriminator
-from dataset import raindata
+#from Model import Generator, Discriminator
+from Model_unetformer import Generator, Discriminator
+from dataset import raindata  #
 
 from torch.utils.data import DataLoader, random_split
 from torch.autograd import Variable
@@ -24,7 +25,7 @@ def seed_everything(seed):
     torch.cuda.manual_seed_all(seed) # All GPU (Optional)
 
 seed_everything(20220901)
-cuda_device = 1
+cuda_device = 6
 epochs = 500
 lr_G = 0.0002
 lr_D = 0.001

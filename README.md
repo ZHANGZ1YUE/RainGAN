@@ -3,7 +3,7 @@ An adversarial training approach to nowcast precipitaion with neural network mod
 (The code is implemented in PyTorch)
 
 ## Author
-ZHANG Ziyue (RIKEN Intern, Center of Computational Science)
+ZHANG Ziyue (RIKEN Intern & Trainee, Center of Computational Science)
 
 ## Starting Date
 2022 Sep. 1st

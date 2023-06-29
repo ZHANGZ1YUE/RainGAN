@@ -1,7 +1,8 @@
 import numpy as np
 import random
 
-from Model import Generator, Discriminator
+#from Model import Generator, Discriminator
+from models_smat.SmaAt_UNet import Generator, Discriminator
 from dataset import raindata  
 
 from torch.utils.data import DataLoader, random_split
@@ -32,8 +33,8 @@ batch_size = 16
 input_channel = 4
 output_channel = 1
 _lambda = 20       #scalar for the pixel-wise loss term
-g_path = "generator.pth"
-d_path = "discriminator.pth"
+g_path = "generator_smat.pth"
+d_path = "discriminator_smat.pth"
 
 torch.cuda.set_device(cuda_device)
 device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")

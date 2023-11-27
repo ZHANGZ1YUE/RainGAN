@@ -3,3 +3,4 @@
 __pycache__/
 load_rawdata.ipynb
 #*.ipynb
+/models_smat
